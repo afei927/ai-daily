@@ -1,86 +1,81 @@
 #!/usr/bin/env bash
-set -euo pipefail
 
 DATE=$(date +%Y-%m-%d)
 OUTDIR="daily"
 mkdir -p "$OUTDIR"
 OUTFILE="$OUTDIR/$DATE.md"
 
-{
-  echo "# AI Daily — $DATE"
-  echo
+echo "# AI Daily — $DATE" > "$OUTFILE"
+echo >> "$OUTFILE"
 
-  # ── 1. Smithery MCP Servers ──
-  echo "## Trending MCP Servers (Smithery)"
-  echo "Source: https://smithery.ai"
-  echo
-  curl -sL --max-time 15 "https://smithery.ai/servers" |
-    grep -oP 'href="/servers/[^"]*"[^>]*>[^<]+' |
-    head -20 |
-    sed 's|href="/servers/||;s|"[^>]*>| |;s|</a>||' |
-    while read -r slug name; do
-      echo "- [$name](https://smithery.ai/servers/$slug)"
+# ── 1. GitHub: AI Agent 高星仓库 ──
+echo "## AI Agent 高星仓库 (GitHub)" >> "$OUTFILE"
+echo "Source: GitHub Search (stars:>500 topic:ai-agent)" >> "$OUTFILE"
+echo >> "$OUTFILE"
+curl -sL --max-time 15 \
+  -H "Accept: application/vnd.github+json" \
+  "https://api.github.com/search/repositories?q=topic:ai-agent+stars:>500&sort=stars&order=desc&per_page=10" 2>/dev/null \
+  | python3 -c "
+import json,sys
+try:
+    data = json.load(sys.stdin)
+    for item in data.get('items', [])[:10]:
+        print(f\"- [{item['full_name']}]({item['html_url']}) ⭐ {item['stargazers_count']} — {item.get('description','')[:80] or 'No description'}\")
+except: pass
+" 2>/dev/null >> "$OUTFILE" || echo "- (failed to fetch)" >> "$OUTFILE"
+echo >> "$OUTFILE"
+
+# ── 2. GitHub: MCP Server 高星仓库 ──
+echo "## MCP Server 高星仓库 (GitHub)" >> "$OUTFILE"
+echo "Source: GitHub Search (stars:>100 topic:mcp-server)" >> "$OUTFILE"
+echo >> "$OUTFILE"
+curl -sL --max-time 15 \
+  -H "Accept: application/vnd.github+json" \
+  "https://api.github.com/search/repositories?q=topic:mcp-server+stars:>100&sort=stars&order=desc&per_page=10" 2>/dev/null \
+  | python3 -c "
+import json,sys
+try:
+    data = json.load(sys.stdin)
+    for item in data.get('items', [])[:10]:
+        print(f\"- [{item['full_name']}]({item['html_url']}) ⭐ {item['stargazers_count']} — {item.get('description','')[:80] or 'No description'}\")
+except: pass
+" 2>/dev/null >> "$OUTFILE" || echo "- (failed to fetch)" >> "$OUTFILE"
+echo >> "$OUTFILE"
+
+# ── 3. GitHub: awesome-mcp-servers ──
+echo "## Awesome MCP Servers 集合" >> "$OUTFILE"
+echo "Source: popular awesome-list repos" >> "$OUTFILE"
+echo >> "$OUTFILE"
+for repo in "punkpeye/awesome-mcp-servers" "appcypher/awesome-mcp-servers" "talent-bird/awesome-mcp"; do
+  data=$(curl -sL --max-time 10 "https://api.github.com/repos/$repo" 2>/dev/null)
+  stars=$(echo "$data" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('stargazers_count','?'))" 2>/dev/null)
+  desc=$(echo "$data" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('description','')[:80])" 2>/dev/null)
+  echo "- [$repo](https://github.com/$repo) ⭐ $stars — $desc" >> "$OUTFILE"
+done
+echo >> "$OUTFILE"
+
+# ── 4. Agent Skills (MCP.so skills 页面) ──
+echo "## Agent Skills" >> "$OUTFILE"
+echo "Source: https://mcp.so/skills" >> "$OUTFILE"
+echo >> "$OUTFILE"
+curl -sL --max-time 15 "https://mcp.so/skills" 2>/dev/null \
+  | sed -n 's/.*href="\/skills\/\([^"]*\)".*title="\([^"]*\)".*/\1 \2/p' \
+  | head -20 \
+  | while read -r slug title; do
+      echo "- [$title](https://mcp.so/skills/$slug)" >> "$OUTFILE"
     done
-  echo
+echo >> "$OUTFILE"
 
-  # ── 2. MCP.so New Arrivals ──
-  echo "## New MCP Servers (MCP.so)"
-  echo "Source: https://mcp.so/servers?sort=latest"
-  echo
-  curl -sL --max-time 15 "https://mcp.so/servers?sort=latest" |
-    grep -oP 'href="/servers/[^"]*"[^>]*class="[^"]*font-semibold' |
-    head -15 |
-    sed 's|href="/servers/||;s|".*||' |
-    while read -r slug; do
-      echo "- [$(echo $slug | sed 's|-| |g')](https://mcp.so/servers/$slug)"
+# ── 5. 新发布 MCP Servers (MCP.so) ──
+echo "## 新发布 MCP Servers (MCP.so)" >> "$OUTFILE"
+echo "Source: https://mcp.so/servers?sort=latest" >> "$OUTFILE"
+echo >> "$OUTFILE"
+curl -sL --max-time 15 "https://mcp.so/servers?sort=latest" 2>/dev/null \
+  | sed -n 's/.*href="\/servers\/\([^"]*\)".*>\([^<]*\)<\/a>.*/\1 \2/p' \
+  | head -15 \
+  | while read -r slug name; do
+      echo "- [$name](https://mcp.so/servers/$slug)" >> "$OUTFILE"
     done
-  echo
-
-  # ── 3. GitHub trending: ai-agent topics ──
-  echo "## GitHub Trending: AI Agent Tools"
-  echo "Source: https://github.com/topics/ai-agent"
-  echo
-  for page in 1 2; do
-    curl -sL --max-time 15 "https://github.com/topics/ai-agent?page=$page" |
-      grep -oP 'href="/[^/"]*/[^/"]*"[^>]*data-view-component="true" class="text-bold"' |
-      sed 's|href="/||g;s|".*||' |
-      head -10 |
-      while read -r repo; do
-        stars=$(curl -sL --max-time 10 "https://api.github.com/repos/$repo" | grep -oP '"stargazers_count":\K[0-9]+' | head -1)
-        echo "- [$repo](https://github.com/$repo) ⭐ $stars"
-      done
-  done
-  echo
-
-  # ── 4. GitHub trending: mcp-server ──
-  echo "## GitHub Trending: MCP Servers"
-  echo "Source: https://github.com/topics/mcp-server"
-  echo
-  for page in 1 2; do
-    curl -sL --max-time 15 "https://github.com/topics/mcp-server?page=$page" |
-      grep -oP 'href="/[^/"]*/[^/"]*"[^>]*data-view-component="true" class="text-bold"' |
-      sed 's|href="/||g;s|".*||' |
-      head -10 |
-      while read -r repo; do
-        stars=$(curl -sL --max-time 10 "https://api.github.com/repos/$repo" | grep -oP '"stargazers_count":\K[0-9]+' | head -1)
-        echo "- [$repo](https://github.com/$repo) ⭐ $stars"
-      done
-  done
-  echo
-
-  # ── 5. MCP.so Skills ──
-  echo "## Agent Skills (MCP.so)"
-  echo "Source: https://mcp.so/skills"
-  echo
-  curl -sL --max-time 15 "https://mcp.so/skills" |
-    grep -oP 'href="/skills/[^"]*"[^>]*>[^<]+' |
-    head -10 |
-    sed 's|href="/skills/||;s|".*>| |;s|</a>||' |
-    while read -r slug name; do
-      echo "- [$name](https://mcp.so/skills/$slug)"
-    done
-  echo
-
-} > "$OUTFILE"
+echo >> "$OUTFILE"
 
 echo "Written: $OUTFILE"
