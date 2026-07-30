@@ -1,0 +1,24 @@
+name: AI Daily
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch AI Agent / MCP / Skills daily data
+        run: bash scripts/fetch.sh
+
+      - name: Commit & push
+        run: |
+          git config user.name "ai-daily-bot"
+          git config user.email "bot@example.com"
+          git add .
+          git diff --quiet && git diff --staged --quiet || \
+            git commit -m "daily update $(date +%Y-%m-%d)"
+          git push
