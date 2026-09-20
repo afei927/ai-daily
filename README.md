@@ -30,3 +30,9 @@ bash scripts/fetch.sh          # 生成 daily/YYYY-MM-DD.md
 python3 -m unittest tests.test_collect -v   # 运行单元测试
 ```
 
+同一天重复运行会直接跳过（不覆盖当天已发布的文件）。需要强制重新生成时：
+
+```bash
+AI_DAILY_FORCE=1 bash scripts/fetch.sh
+```
+

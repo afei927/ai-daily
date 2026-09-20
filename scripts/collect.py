@@ -162,6 +162,13 @@ def _body(items, failed, render):
 
 def main():
     today = date.today().isoformat()
+    os.makedirs(OUTDIR, exist_ok=True)
+    outfile = os.path.join(OUTDIR, f"{today}.md")
+    if os.path.exists(outfile) and not os.environ.get("AI_DAILY_FORCE"):
+        print(f"Skip: {outfile} already exists "
+              f"(set AI_DAILY_FORCE=1 to regenerate)")
+        return 0
+
     token = os.environ.get("GITHUB_TOKEN") or None
     seen = load_seen()
     seen_gh = set(seen["github"])
@@ -216,8 +223,6 @@ def main():
          _body(new_mcp, f_new_mcp, render_mcp_line)),
     ])
 
-    os.makedirs(OUTDIR, exist_ok=True)
-    outfile = os.path.join(OUTDIR, f"{today}.md")
     with open(outfile, "w", encoding="utf-8") as f:
         f.write(doc)
     print(f"Written: {outfile}")

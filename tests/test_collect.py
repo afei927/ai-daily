@@ -2,6 +2,7 @@ import json
 import os
 import tempfile
 import unittest
+from datetime import date
 from unittest import mock
 
 import sys
@@ -165,8 +166,43 @@ class TestMain(unittest.TestCase):
         os.chdir(self.tmp.name)
 
     def tearDown(self):
+        os.environ.pop("AI_DAILY_FORCE", None)
         os.chdir(self.old)
         self.tmp.cleanup()
+
+    def test_skips_when_today_file_exists(self):
+        os.makedirs("daily", exist_ok=True)
+        outfile = os.path.join("daily", date.today().isoformat() + ".md")
+        with open(outfile, "w", encoding="utf-8") as f:
+            f.write("existing content")
+
+        with mock.patch.object(collect, "github_search") as gs, \
+             mock.patch.object(collect, "fetch_mcpso") as fm:
+            rc = collect.main()
+
+        self.assertEqual(rc, 0)
+        gs.assert_not_called()
+        fm.assert_not_called()
+        self.assertFalse(os.path.exists(collect.SEEN_PATH))
+        with open(outfile, encoding="utf-8") as f:
+            self.assertEqual(f.read(), "existing content")
+
+    def test_force_env_overrides_skip(self):
+        os.makedirs("daily", exist_ok=True)
+        outfile = os.path.join("daily", date.today().isoformat() + ".md")
+        with open(outfile, "w", encoding="utf-8") as f:
+            f.write("stale")
+        os.environ["AI_DAILY_FORCE"] = "1"
+
+        with mock.patch.object(collect, "github_search",
+                               lambda q, t, per_page=100: {"items": []}), \
+             mock.patch.object(collect, "fetch_mcpso", lambda url=None: "html"), \
+             mock.patch.object(collect, "parse_mcpso", lambda h: []):
+            rc = collect.main()
+
+        self.assertEqual(rc, 0)
+        with open(outfile, encoding="utf-8") as f:
+            self.assertNotEqual(f.read(), "stale")
 
     def test_writes_file_and_updates_ledger(self):
         repos = [
