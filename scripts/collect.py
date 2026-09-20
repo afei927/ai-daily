@@ -46,3 +46,37 @@ def save_seen(seen, path=SEEN_PATH):
     with open(path, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
         f.write("\n")
+
+
+_CARD_SPLIT = re.compile(r'<a href="/servers/([^"/]+)"')
+_H3 = re.compile(r"<h3[^>]*>(.*?)</h3>", re.S)
+_AUTHOR = re.compile(
+    r'<p\s[^>]*class="[^"]*text-muted-foreground[^"]*"[^>]*>(.*?)</p>', re.S)
+_ADDED = re.compile(r'<span class="ml-auto shrink-0"[^>]*>(.*?)</span>', re.S)
+_TAGS = re.compile(r"<[^>]+>")
+
+
+def _clean(fragment):
+    return html.unescape(_TAGS.sub("", fragment)).strip()
+
+
+def parse_mcpso(html_text):
+    parts = _CARD_SPLIT.split(html_text)
+    items = []
+    seen_slugs = set()
+    for i in range(1, len(parts) - 1, 2):
+        slug = parts[i]
+        segment = parts[i + 1]
+        if slug in seen_slugs:
+            continue
+        seen_slugs.add(slug)
+        name_m = _H3.search(segment)
+        author_m = _AUTHOR.search(segment)
+        added_m = _ADDED.search(segment)
+        items.append({
+            "slug": slug,
+            "name": _clean(name_m.group(1)) if name_m else slug,
+            "author": _clean(author_m.group(1)) if author_m else "",
+            "added": _clean(added_m.group(1)) if added_m else "",
+        })
+    return items
