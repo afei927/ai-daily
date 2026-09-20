@@ -80,3 +80,45 @@ def parse_mcpso(html_text):
             "added": _clean(added_m.group(1)) if added_m else "",
         })
     return items
+
+
+def select_new(candidates, seen, limit=NEW_LIMIT):
+    out = []
+    for key in candidates:
+        if key in seen:
+            continue
+        out.append(key)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def order_by_created(repos):
+    return sorted(repos, key=lambda r: r.get("created_at") or "", reverse=True)
+
+
+def render_repo_line(repo):
+    desc = (repo.get("description") or "No description").replace("\n", " ").strip()[:80]
+    return (f"- [{repo['full_name']}]({repo['html_url']}) "
+            f"⭐ {repo['stargazers_count']} — {desc}")
+
+
+def render_mcp_line(item):
+    label = item.get("name") or item.get("slug", "")
+    line = f"- [{label}](https://mcp.so/servers/{item.get('slug', '')})"
+    if item.get("author"):
+        line += f" — {item['author']}"
+    if item.get("added"):
+        line += f" ({item['added']})"
+    return line
+
+
+def render_document(today, sections):
+    lines = [f"# AI Daily — {today}", ""]
+    for title, source, body in sections:
+        lines.append(f"## {title}")
+        lines.append(f"Source: {source}")
+        lines.append("")
+        lines.extend(body if body else NO_NEW)
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"

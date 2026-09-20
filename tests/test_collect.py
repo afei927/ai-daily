@@ -81,5 +81,74 @@ class TestParseMcpso(unittest.TestCase):
         self.assertEqual(items[0]["added"], "")
 
 
+class TestSelectNew(unittest.TestCase):
+    def test_filters_seen_and_preserves_order(self):
+        got = collect.select_new(["a", "b", "c"], {"b"}, limit=10)
+        self.assertEqual(got, ["a", "c"])
+
+    def test_caps_at_limit(self):
+        got = collect.select_new(["a", "b", "c"], set(), limit=2)
+        self.assertEqual(got, ["a", "b"])
+
+
+class TestOrderByCreated(unittest.TestCase):
+    def test_newest_first(self):
+        repos = [{"full_name": "old", "created_at": "2026-09-01T00:00:00Z"},
+                 {"full_name": "new", "created_at": "2026-09-19T00:00:00Z"},
+                 {"full_name": "mid", "created_at": "2026-09-10T00:00:00Z"}]
+        self.assertEqual([r["full_name"] for r in collect.order_by_created(repos)],
+                         ["new", "mid", "old"])
+
+    def test_missing_created_at_sorts_last(self):
+        repos = [{"full_name": "a"}, {"full_name": "b", "created_at": "2026-01-01T00:00:00Z"}]
+        self.assertEqual([r["full_name"] for r in collect.order_by_created(repos)],
+                         ["b", "a"])
+
+
+class TestRenderLines(unittest.TestCase):
+    def test_repo_line(self):
+        repo = {"full_name": "o/r", "html_url": "https://github.com/o/r",
+                "stargazers_count": 42, "description": "hello"}
+        self.assertEqual(collect.render_repo_line(repo),
+                         "- [o/r](https://github.com/o/r) ⭐ 42 — hello")
+
+    def test_repo_line_without_description(self):
+        repo = {"full_name": "o/r", "html_url": "https://github.com/o/r",
+                "stargazers_count": 1, "description": None}
+        self.assertIn("No description", collect.render_repo_line(repo))
+
+    def test_repo_line_truncates_description(self):
+        repo = {"full_name": "o/r", "html_url": "u", "stargazers_count": 1,
+                "description": "x" * 200}
+        self.assertLessEqual(len(collect.render_repo_line(repo).split("— ")[1]), 80)
+
+    def test_mcp_line(self):
+        item = {"slug": "s", "name": "Name", "author": "Auth", "added": "Added in 1 hour"}
+        self.assertEqual(collect.render_mcp_line(item),
+                         "- [Name](https://mcp.so/servers/s) — Auth (Added in 1 hour)")
+
+    def test_mcp_line_minimal(self):
+        item = {"slug": "only", "name": "", "author": "", "added": ""}
+        self.assertEqual(collect.render_mcp_line(item),
+                         "- [only](https://mcp.so/servers/only)")
+
+
+class TestRenderDocument(unittest.TestCase):
+    def test_sections_and_headers(self):
+        doc = collect.render_document("2026-09-20", [
+            ("常青榜 · AI Agent (GitHub)", "src-a", ["- line-a"]),
+            ("今日新发现 · MCP Server", "src-b", []),
+        ])
+        self.assertTrue(doc.startswith("# AI Daily — 2026-09-20\n"))
+        self.assertIn("## 常青榜 · AI Agent (GitHub)\nSource: src-a\n", doc)
+        self.assertIn("- line-a", doc)
+        self.assertIn("- (今日无新增)", doc)
+
+    def test_ends_with_single_newline(self):
+        doc = collect.render_document("2026-09-20", [("t", "s", ["- x"])])
+        self.assertTrue(doc.endswith("\n"))
+        self.assertFalse(doc.endswith("\n\n"))
+
+
 if __name__ == "__main__":
     unittest.main()
